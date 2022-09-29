@@ -1,0 +1,17 @@
+version: "3.9"
+services:  
+  emotion_detection:
+    build: 
+      context: ../
+      args:
+        - MODEL_URL=$MODEL_URL
+        - IMAGE=$IMAGE
+        - ZIP_ID=$ZIP_ID
+    ports:
+    - '8083:8083'
+    tty: true
+    stdin_open: true
+    restart: always
+    runtime: nvidia
+    env_file:
+    - .env
