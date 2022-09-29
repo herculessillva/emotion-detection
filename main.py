@@ -14,8 +14,17 @@ from fastapi.responses import StreamingResponse
 from threading import Thread
 import threading
 import uvicorn
+import tensorflow as tf
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+
+gpus = tf.config.experimental.list_physical_devices('GPU')
+if gpus:
+    try:
+        for gpu in gpus:
+            tf.config.experimental.set_memory_growth(gpu, True)
+    except RuntimeError as e:
+        print(e)
 
 # Create the model
 model = Sequential()
@@ -73,8 +82,8 @@ tlx, tly, brx, bry = 185, 15, 1735, 885
 facecasc = cv2.CascadeClassifier(config.CASCADE_PATH)
 
 # dictionary which assigns each label an emotion (alphabetical order)
-emotion_dict = {0: "Angry", 1: "Disgusted", 2: "Fearful",
-                3: "Happy", 4: "Neutral", 5: "Sad", 6: "Surprised"}
+emotion_dict = {0: "Bravo", 1: "Com nojo", 2: "Temeroso",
+                3: "Feliz", 4: "Neutro", 5: "Triste", 6: "Surpreso"}
 
 
 def get_frame():
@@ -97,18 +106,34 @@ def detect_emoction(frame):
 
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-    faces = facecasc.detectMultiScale(
-        gray, scaleFactor=1.3, minNeighbors=5)
+    gray = cv2.equalizeHist(gray)
+    faces = facecasc.detectMultiScale(gray, scaleFactor=1.5, minNeighbors=5)
 
     for (x, y, w, h) in faces:
-        cv2.rectangle(image, (x, y-50), (x+w, y+h+10), (255, 0, 0), 2)
+        tlx = x
+        tly = y
+        brx = int(x + w)
+        bry = int(y + h)
+
+        cv2.rectangle(image, (tlx, tly), (brx, bry), (0, 140, 255), 3)
         roi_gray = gray[y:y + h, x:x + w]
         cropped_img = np.expand_dims(np.expand_dims(
             cv2.resize(roi_gray, (48, 48)), -1), 0)
         prediction = model.predict(cropped_img)
         maxindex = int(np.argmax(prediction))
-        cv2.putText(image, emotion_dict[maxindex], (x+20, y-60),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
+        (w, h), _ = cv2.getTextSize(
+            emotion_dict[maxindex], cv2.FONT_HERSHEY_SIMPLEX, 1, 2)
+
+        if tly < 20:
+            image = cv2.rectangle(image, (tlx-1, bry + h + 10),
+                                  (tlx-1 + w, bry), (0, 140, 255), -1)
+            image = cv2.putText(image, emotion_dict[maxindex], (tlx, bry + 15),
+                                cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+        else:
+            image = cv2.rectangle(image, (tlx-1, tly - h - 15),
+                                  (tlx-1 + w, tly), (0, 140, 255), -1)
+            image = cv2.putText(image, emotion_dict[maxindex], (tlx, tly - 10),
+                                cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
 
     return image
 
@@ -163,6 +188,7 @@ def video_feed() -> StreamingResponse:
 
 
 if __name__ == "__main__":
+
     thread = Thread(target=get_frame)
     thread.start()
     uvicorn.run(app, host="0.0.0.0", port=8083)
