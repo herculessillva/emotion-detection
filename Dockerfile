@@ -32,6 +32,19 @@ WORKDIR /usr/src/app
 RUN chmod +x setup-python3.8.sh
 RUN sh setup-python3.8.sh
 
+# Compile DLIB
+RUN git clone https://github.com/davisking/dlib.git
+WORKDIR dlib
+RUN mkdir build
+WORKDIR build
+RUN cmake .. -DDLIB_USE_CUDA=1 -DUSE_AVX_INSTRUCTIONS=1
+RUN cmake --build .
+WORKDIR ..
+RUN python3 setup.py install
+
+# Return to root path
+WORKDIR /usr/src/app
+
 # Install project requirements
 RUN pip3 install --upgrade pip
 RUN pip3 install -r requirements.txt

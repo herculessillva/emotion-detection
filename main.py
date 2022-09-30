@@ -15,6 +15,8 @@ from threading import Thread
 import threading
 import uvicorn
 import tensorflow as tf
+import face_recognition
+import imutils
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
@@ -79,8 +81,6 @@ overlay = cv2.imread('overlay.png')
 tlx, tly, brx, bry = 185, 15, 1735, 885
 
 
-facecasc = cv2.CascadeClassifier(config.CASCADE_PATH)
-
 # dictionary which assigns each label an emotion (alphabetical order)
 emotion_dict = {0: "Bravo", 1: "Com nojo", 2: "Temeroso",
                 3: "Feliz", 4: "Neutro", 5: "Triste", 6: "Surpreso"}
@@ -101,26 +101,30 @@ def get_frame():
 
 
 def detect_emoction(frame):
-    global facecasc, emotion_dict, model
+    global emotion_dict, model
     image = copy.copy(frame)
 
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
-    gray = cv2.equalizeHist(gray)
-    faces = facecasc.detectMultiScale(gray, scaleFactor=1.5, minNeighbors=5)
+    rgb = imutils.resize(frame, width=750)
+    r = image.shape[1] / float(rgb.shape[1])
+    faces = face_recognition.face_locations(rgb,
+                                            model="cnn")
 
-    for (x, y, w, h) in faces:
-        tlx = x
-        tly = y
-        brx = int(x + w)
-        bry = int(y + h)
+    for (top, right, bottom, left) in faces:
+        tlx = int(left*r)
+        tly = int(top*r)
+        brx = int(right*r)
+        bry = int(bottom*r)
 
         cv2.rectangle(image, (tlx, tly), (brx, bry), (0, 140, 255), 3)
-        roi_gray = gray[y:y + h, x:x + w]
+        roi_gray = gray[tly:bry, tlx:brx]
         cropped_img = np.expand_dims(np.expand_dims(
             cv2.resize(roi_gray, (48, 48)), -1), 0)
         prediction = model.predict(cropped_img)
         maxindex = int(np.argmax(prediction))
+
         (w, h), _ = cv2.getTextSize(
             emotion_dict[maxindex], cv2.FONT_HERSHEY_SIMPLEX, 1, 2)
 
